@@ -1,0 +1,14 @@
+--- a/src/libmtp.c
++++ b/src/libmtp.c
+@@ -2065,6 +2065,11 @@
+        * If bugs are fixed in later versions, test on tmpext->major, tmpext->minor
+        */
+       ptp_usb->rawdevice.device_entry.device_flags |= DEVICE_FLAGS_ANDROID_BUGS;
++#ifdef USE_DARWIN
++      /* MacAndroid Relay: closing Android sessions must release the interface,
++       * not USB-reset the phone and invalidate immediate reconnects. */
++      ptp_usb->rawdevice.device_entry.device_flags &= ~DEVICE_FLAG_FORCE_RESET_ON_CLOSE;
++#endif
+       LIBMTP_INFO("Android device detected, assigning default bug flags\n");
+     }
+     else if (is_sony_net_wmfu) {

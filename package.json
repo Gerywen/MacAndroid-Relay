@@ -1,0 +1,51 @@
+{
+  "name": "macandroid-relay",
+  "productName": "MacAndroid Relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A fresh macOS Android file transfer app",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run typecheck && vite build && node scripts/build-electron.mjs",
+    "typecheck": "tsc -b",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "verify": "node scripts/verify.mjs",
+    "package:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac --dir --publish never",
+    "postinstall": "node node_modules/electron/install.js",
+    "verify:dev": "node scripts/verify.mjs --dev",
+    "verify:hardware": "node scripts/verify.mjs --hardware",
+    "format": "prettier --write src electron shared scripts tests *.ts *.cjs *.json *.html *.md native/README*.md docs/*.md",
+    "format:check": "prettier --check src electron shared scripts tests *.ts *.cjs *.json *.html *.md native/README*.md docs/*.md",
+    "build:core": "node scripts/build-native.mjs",
+    "package:mas:dev": "node scripts/build-mas.mjs",
+    "package:mas": "node scripts/build-mas.mjs --distribution",
+    "verify:mas:policy": "node scripts/verify.mjs --mas-policy"
+  },
+  "dependencies": {
+    "koffi": "3.3.3",
+    "lucide-react": "^0.577.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "usb": "^2.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "44.7.1",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.27.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3",
+    "vite": "8.3.4"
+  },
+  "author": "MacAndroid Relay contributors"
+}

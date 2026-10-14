@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-electron/
+release/
+*.tsbuildinfo
+.DS_Store
+native-build/
+
+# Apple signing materials stay outside version control
+*.provisionprofile
+*.mobileprovision
+*.p12
+*.p8
+.env
+.env.*
