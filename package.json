@@ -3,7 +3,7 @@
   "productName": "MacAndroid Relay",
   "version": "0.1.0",
   "private": true,
-  "description": "A fresh macOS Android file transfer app",
+  "description": "Transfer files between macOS and Android over USB with a bilingual, two-pane interface.",
   "license": "MIT",
   "type": "module",
   "main": "dist-electron/main.cjs",
@@ -47,5 +47,26 @@
     "typescript": "^5.9.3",
     "vite": "8.3.4"
   },
-  "author": "MacAndroid Relay contributors"
+  "author": {
+    "name": "gerywen",
+    "url": "https://github.com/Gerywen"
+  },
+  "homepage": "https://github.com/Gerywen/MacAndroid-Relay#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gerywen/MacAndroid-Relay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Gerywen/MacAndroid-Relay/issues"
+  },
+  "keywords": [
+    "macos",
+    "android",
+    "mtp",
+    "usb",
+    "file-transfer",
+    "electron",
+    "react",
+    "typescript"
+  ]
 }
