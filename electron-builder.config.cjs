@@ -15,7 +15,7 @@ module.exports = {
   mac: {
     icon: 'resources/icon.icns',
     category: 'public.app-category.utilities',
-    target: ['dir'],
+    target: ['dmg'],
     identity: '-',
     extendInfo: {
       CFBundleLocalizations: ['en', 'zh-Hans'],

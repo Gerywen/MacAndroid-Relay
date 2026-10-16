@@ -16,6 +16,7 @@ export interface MtpOperations {
   mutate: { args: [request: Mutation]; result: void };
   transfer: { args: [request: TransferRequest]; result: string };
   diagnostics: { args: []; result: string };
+  cancelTransfer: { args: []; result: void };
   close: { args: []; result: void };
 }
 export type MtpRequest = {

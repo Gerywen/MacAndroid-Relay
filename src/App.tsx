@@ -14,12 +14,12 @@ import {
   CheckCircle2,
   AlertCircle,
   FolderPlus,
+  FolderOpen,
   Pencil,
   Trash2,
   Copy,
+  RefreshCw,
   X,
-  ArrowUpRight,
-  ArrowDownLeft,
 } from 'lucide-react';
 import type {
   Bootstrap,
@@ -31,6 +31,7 @@ import type {
   TransferUpdate,
   Failure,
 } from '../shared/contracts';
+import { ContextMenu } from './components/ContextMenu';
 import { FilePane } from './components/FilePane';
 import { Modal } from './components/Modal';
 import { usePane, type PaneState } from './hooks/usePane';
@@ -49,6 +50,7 @@ type Dialog =
   | { type: 'settings' | 'help' }
   | { type: 'mkdir' | 'rename' | 'delete'; device: Device }
   | { type: 'overwrite'; request: TransferRequest };
+type Menu = { x: number; y: number; device: Device; file: FileNode | null } | null;
 export function App() {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [preferences, setPreferences] = useState<Preferences>(defaults);
@@ -62,22 +64,29 @@ export function App() {
   const [submitting, setSubmitting] = useState(false);
   const [jobs, setJobs] = useState<TransferUpdate[]>([]);
   const [transferPending, setTransferPending] = useState(false);
+  const [cancellingTransfer, setCancellingTransfer] = useState(false);
   const [toast, setToast] = useState<{
-    key: 'folderCreated' | 'renamed' | 'deleted' | 'copied' | 'transferDone';
+    key: 'folderCreated' | 'renamed' | 'deleted' | 'copied' | 'transferDone' | 'transferFailed';
     id: number;
+    error?: boolean;
+    message?: string;
   } | null>(null);
   const [globalError, setGlobalError] = useState<Failure | null>(null);
   const [diagnostics, setDiagnostics] = useState('');
+  const [menu, setMenu] = useState<Menu>(null);
   const local = usePane('local', preferences, null);
   const mtp = usePane('mtp', preferences, storageId);
   const t = translate(preferences.language);
   const busy =
     transferPending || jobs.some((job) => job.status === 'running' || job.status === 'preparing');
+  const runningJob = jobs.find((job) => job.status === 'running' || job.status === 'preparing');
   const current = active === 'local' ? local : mtp;
   const actions = useRef({ local, mtp, connect: () => {}, busy: false });
   const connectingRef = useRef(false);
   const preferencesRevision = useRef(0);
   const notify = (key: NonNullable<typeof toast>['key']) => setToast({ key, id: Date.now() });
+  const notifyFailure = (message: string) =>
+    setToast({ key: 'transferFailed', id: Date.now(), error: true, message });
   const updatePreferences = async (patch: Partial<Preferences>) => {
     const revision = ++preferencesRevision.current;
     setPreferences((value) => ({ ...value, ...patch }));
@@ -166,9 +175,15 @@ export function App() {
   useEffect(
     () =>
       window.desktop.onTransfer((update) => {
+        if (update.status === 'completed' || update.status === 'failed')
+          setCancellingTransfer(false);
         setJobs((jobs) => [update, ...jobs.filter((job) => job.id !== update.id)].slice(0, 30));
         if (update.status === 'completed') {
           notify('transferDone');
+          void actions.current.local.refresh();
+          void actions.current.mtp.refresh();
+        } else if (update.status === 'failed') {
+          notifyFailure(update.error ? t(errorKey(update.error)) : t('transferFailed'));
           void actions.current.local.refresh();
           void actions.current.mtp.refresh();
         }
@@ -345,10 +360,18 @@ export function App() {
         .catch((error) => setGlobalError(asFailure(error)));
     else void transfer('download', [file]);
   };
-  const copy = async () => {
-    const value = current.selected.join('\n') || current.path;
+  const copy = async (device: Device = active) => {
+    const pane = device === 'local' ? local : mtp;
+    const value = pane.selected.join('\n') || pane.path;
     unwrap(await window.desktop.copyText(value));
     notify('copied');
+  };
+  const showContextMenu = (device: Device, file: FileNode | null, event: React.MouseEvent) => {
+    event.preventDefault();
+    const pane = device === 'local' ? local : mtp;
+    if (file && !pane.selected.includes(file.path)) pane.setSelected([file.path]);
+    setActive(device);
+    setMenu({ x: event.clientX, y: event.clientY, device, file });
   };
   const shortcutIcons = {
     home: Home,
@@ -368,6 +391,136 @@ export function App() {
     onStorage: setStorageId,
     onView: (view: 'list' | 'grid') => void updatePreferences({ view }),
   };
+  const renderContextMenu = () => {
+    if (!menu) return null;
+    const pane = menu.device === 'local' ? local : mtp;
+    const unavailable = menu.device === 'mtp' && !connection?.connected;
+    return (
+      <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+        {menu.file ? (
+          <>
+            <button
+              className="context-item"
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                open(pane, menu.file!);
+                setMenu(null);
+              }}
+            >
+              {menu.file.isFolder ? <FolderOpen size={16} /> : <FileText size={16} />}
+              <span>{t('open')}</span>
+            </button>
+            {menu.device === 'mtp' ? (
+              <button
+                className="context-item"
+                role="menuitem"
+                disabled={!connection?.connected || !pane.selected.length || busy}
+                onClick={() => {
+                  void transfer('download');
+                  setMenu(null);
+                }}
+              >
+                <ArrowDownToLine size={16} />
+                <span>{t('download')}</span>
+              </button>
+            ) : (
+              <button
+                className="context-item"
+                role="menuitem"
+                disabled={!connection?.connected || !pane.selected.length || busy}
+                onClick={() => {
+                  void transfer('upload');
+                  setMenu(null);
+                }}
+              >
+                <ArrowUpFromLine size={16} />
+                <span>{t('upload')}</span>
+              </button>
+            )}
+            <div className="context-separator" />
+            <button
+              className="context-item"
+              role="menuitem"
+              disabled={!pane.path}
+              onClick={() => {
+                void copy(menu.device).catch((error) => setGlobalError(asFailure(error)));
+                setMenu(null);
+              }}
+            >
+              <Copy size={16} />
+              <span>{t('copyPath')}</span>
+            </button>
+            <button
+              className="context-item"
+              role="menuitem"
+              disabled={pane.selected.length !== 1 || busy}
+              onClick={() => {
+                showMutation('rename', menu.device);
+                setMenu(null);
+              }}
+            >
+              <Pencil size={16} />
+              <span>{t('rename')}</span>
+            </button>
+            <button
+              className="context-item danger"
+              role="menuitem"
+              disabled={!pane.selected.length || busy}
+              onClick={() => {
+                showMutation('delete', menu.device);
+                setMenu(null);
+              }}
+            >
+              <Trash2 size={16} />
+              <span>{t('delete')}</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className="context-item"
+              role="menuitem"
+              disabled={unavailable || busy}
+              onClick={() => {
+                showMutation('mkdir', menu.device);
+                setMenu(null);
+              }}
+            >
+              <FolderPlus size={16} />
+              <span>{t('newFolder')}</span>
+            </button>
+            <button
+              className="context-item"
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                if (unavailable) void connect();
+                else void pane.refresh();
+                setMenu(null);
+              }}
+            >
+              <RefreshCw size={16} />
+              <span>{t('refresh')}</span>
+            </button>
+            <div className="context-separator" />
+            <button
+              className="context-item"
+              role="menuitem"
+              disabled={!pane.path}
+              onClick={() => {
+                void copy(menu.device).catch((error) => setGlobalError(asFailure(error)));
+                setMenu(null);
+              }}
+            >
+              <Copy size={16} />
+              <span>{t('copyPath')}</span>
+            </button>
+          </>
+        )}
+      </ContextMenu>
+    );
+  };
   return (
     <div className="application">
       <header className="titlebar">
@@ -375,6 +528,7 @@ export function App() {
         <div className="titlebar-tools">
           <button
             className="icon-button"
+            title={t('help')}
             aria-label={t('help')}
             onClick={() => {
               setDialog({ type: 'help' });
@@ -385,6 +539,7 @@ export function App() {
           </button>
           <button
             className="icon-button"
+            title={t('settings')}
             aria-label={t('settings')}
             onClick={() => setDialog({ type: 'settings' })}
           >
@@ -503,6 +658,7 @@ export function App() {
               </details>
               <button
                 className="icon-button"
+                title={t('close')}
                 aria-label={t('close')}
                 onClick={() => setGlobalError(null)}
               >
@@ -532,6 +688,7 @@ export function App() {
               }
               onOpen={(file) => open(local, file)}
               onDrop={(sources) => void transfer('download', sources)}
+              onContextMenu={(file, event) => showContextMenu('local', file, event)}
             />
             <FilePane
               {...paneProps}
@@ -541,80 +698,9 @@ export function App() {
               onFolder={() => showMutation('mkdir', 'mtp')}
               onOpen={(file) => open(mtp, file)}
               onDrop={(sources) => void transfer('upload', sources)}
+              onContextMenu={(file, event) => showContextMenu('mtp', file, event)}
             />
           </div>
-          <section
-            className={`transfer-shelf ${jobs.length ? 'has-jobs' : ''}`}
-            aria-label={t('transfers')}
-          >
-            <div className="shelf-heading">
-              <h2>
-                {t('transfers')}
-                {jobs.length > 0 && <span>{jobs.length}</span>}
-              </h2>
-              {jobs.length > 0 && (
-                <button
-                  className="text-button"
-                  onClick={() =>
-                    setJobs((jobs) =>
-                      jobs.filter((job) => job.status === 'running' || job.status === 'preparing'),
-                    )
-                  }
-                >
-                  {t('clear')}
-                </button>
-              )}
-            </div>
-            {jobs.length ? (
-              <div className="transfer-list">
-                {jobs.map((job) => (
-                  <div className="transfer-job" key={job.id} data-transfer={job.status}>
-                    <div className={`transfer-icon ${job.direction}`}>
-                      {job.direction === 'upload' ? (
-                        <ArrowUpRight size={19} />
-                      ) : (
-                        <ArrowDownLeft size={19} />
-                      )}
-                    </div>
-                    <div className="transfer-job-main">
-                      <strong>
-                        {job.currentFile.split('/').at(-1) || `${job.count} ${t('transferCount')}`}
-                      </strong>
-                      <span>
-                        {job.error
-                          ? t(errorKey(job.error))
-                          : `${job.destination} · ${t(job.status)}`}
-                      </span>
-                      <div
-                        className="progress-track"
-                        role="progressbar"
-                        aria-label={t('running')}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={Math.round(job.progress)}
-                      >
-                        <i style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }} />
-                      </div>
-                    </div>
-                    <div className="transfer-meta">
-                      {job.status === 'completed' ? (
-                        <CheckCircle2 size={19} />
-                      ) : job.status === 'failed' ? (
-                        <AlertCircle size={19} />
-                      ) : (
-                        <strong>{Math.round(job.progress)}%</strong>
-                      )}
-                      <span>
-                        {job.status === 'running' ? `${job.speed.toFixed(2)} MB/s` : t(job.status)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p>{t('transferHint')}</p>
-            )}
-          </section>
         </main>
       </div>
       <footer className="statusbar">
@@ -622,12 +708,80 @@ export function App() {
           <i className={connection?.connected ? 'online' : ''} />
           {connection?.connected ? t('connected') : t('ready')}
         </span>
+        {runningJob && (
+          <span className="status-transfer">
+            <span className="status-progress">
+              <i style={{ width: `${Math.max(0, Math.min(100, runningJob.progress))}%` }} />
+            </span>
+            <strong>{Math.round(runningJob.progress)}%</strong>
+            <span className="status-file">
+              {runningJob.currentFile.split('/').at(-1) ||
+                `${runningJob.count} ${t('transferCount')}`}
+            </span>
+          </span>
+        )}
         <span>{t('sourceNote')}</span>
       </footer>
+      {runningJob && (
+        <section className="transfer-card" aria-label={t('transferring')}>
+          <div className="transfer-card-heading">
+            <strong>
+              {cancellingTransfer
+                ? t('cancellingTransfer')
+                : runningJob.status === 'preparing'
+                  ? t('preparingTransfer')
+                  : runningJob.progress >= 99
+                    ? t('finalizingTransfer')
+                    : t('transferring')}
+            </strong>
+            <button
+              className="button"
+              disabled={cancellingTransfer}
+              onClick={() => {
+                setCancellingTransfer(true);
+                void window.desktop.cancelTransfer().then((result) => {
+                  if (!result.ok) {
+                    setCancellingTransfer(false);
+                    notifyFailure(t(errorKey(result.error)));
+                  }
+                });
+              }}
+            >
+              {t('cancelTransfer')}
+            </button>
+          </div>
+          <div className="transfer-filename" title={runningJob.currentFile}>
+            {runningJob.currentFile.split('/').at(-1) || '—'}
+          </div>
+          <div
+            className={`transfer-meter ${runningJob.status === 'preparing' ? 'indeterminate' : ''}`}
+            role="progressbar"
+            aria-label={t('transferring')}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={
+              runningJob.status === 'preparing' ? undefined : Math.floor(runningJob.progress)
+            }
+          >
+            <i style={{ width: `${runningJob.progress}%` }} />
+          </div>
+          <div className="transfer-details">
+            <span>
+              {runningJob.status === 'preparing' ? '—' : `${Math.floor(runningJob.progress)}%`}
+            </span>
+            <span>
+              {size(runningJob.bytesSent)} /{' '}
+              {runningJob.totalBytes ? size(runningJob.totalBytes) : '—'}
+            </span>
+            <span>{runningJob.speed > 0 ? `${size(runningJob.speed * 1048576)}/s` : '—'}</span>
+          </div>
+        </section>
+      )}
+      {renderContextMenu()}
       {toast && (
-        <div className="toast" role="status" aria-live="polite">
-          <CheckCircle2 size={17} />
-          {t(toast.key)}
+        <div className={`toast ${toast.error ? 'error' : ''}`} role="status" aria-live="polite">
+          {toast.error ? <AlertCircle size={17} /> : <CheckCircle2 size={17} />}
+          {toast.message || t(toast.key)}
         </div>
       )}
       {dialog?.type === 'settings' && (

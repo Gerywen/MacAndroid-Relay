@@ -34,6 +34,7 @@ type Props = {
   onChooseFolder?: () => void;
   onOpen: (file: FileNode) => void;
   onDrop: (sources: { path: string; name: string; isFolder: boolean }[]) => void;
+  onContextMenu: (file: FileNode | null, event: React.MouseEvent) => void;
   onView: (view: 'list' | 'grid') => void;
 };
 export function FilePane({
@@ -52,6 +53,7 @@ export function FilePane({
   onChooseFolder,
   onOpen,
   onDrop,
+  onContextMenu,
   onView,
 }: Props) {
   const t = translate(preferences.language);
@@ -183,6 +185,7 @@ export function FilePane({
         if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false);
       }}
       onDrop={drop}
+      onContextMenu={(event) => onContextMenu(null, event)}
     >
       <header className="pane-header">
         <div className={`pane-device ${mtp ? 'android' : 'mac'}`}>
@@ -371,10 +374,20 @@ export function FilePane({
               onChange={(event) => pane.setSearch(event.target.value)}
             />
             <div className="segmented">
-              <button aria-label={t('list')} aria-pressed={!grid} onClick={() => onView('list')}>
+              <button
+                title={t('list')}
+                aria-label={t('list')}
+                aria-pressed={!grid}
+                onClick={() => onView('list')}
+              >
                 <List size={16} />
               </button>
-              <button aria-label={t('grid')} aria-pressed={grid} onClick={() => onView('grid')}>
+              <button
+                title={t('grid')}
+                aria-label={t('grid')}
+                aria-pressed={grid}
+                onClick={() => onView('grid')}
+              >
                 <Grid2X2 size={16} />
               </button>
             </div>
@@ -462,6 +475,10 @@ export function FilePane({
                     }}
                     onClick={(event) => select(file, index, event)}
                     onDoubleClick={() => onOpen(file)}
+                    onContextMenu={(event) => {
+                      event.stopPropagation();
+                      onContextMenu(file, event);
+                    }}
                   >
                     <input
                       type="checkbox"

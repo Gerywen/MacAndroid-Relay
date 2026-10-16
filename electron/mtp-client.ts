@@ -15,6 +15,49 @@ export class MtpClient {
   private lastTransfer?: TransferUpdate;
   private busy = false;
   private stopping = false;
+  private cancelling = false;
+  private watchdog?: ReturnType<typeof setTimeout>;
+  private clearWatchdog() {
+    clearTimeout(this.watchdog);
+    this.watchdog = undefined;
+  }
+  private watchTransfer(delay = 120000, code: 'TIMEOUT' | 'CANCELLED' = 'TIMEOUT') {
+    this.clearWatchdog();
+    this.watchdog = setTimeout(
+      () =>
+        this.abortService(
+          new AppError(
+            code,
+            code === 'TIMEOUT'
+              ? 'Device stopped responding; reconnect to continue'
+              : 'Transfer cancelled; reconnect to continue',
+          ),
+        ),
+      delay,
+    );
+  }
+  private abortService(error: AppError) {
+    this.clearWatchdog();
+    const child = this.process;
+    this.process = undefined;
+    for (const pending of this.pending.values()) pending.reject(error);
+    this.pending.clear();
+    if (this.busy && this.lastTransfer)
+      this.transferListener?.({
+        ...this.lastTransfer,
+        status: 'failed',
+        error: { code: error.code, message: error.message },
+      });
+    this.busy = false;
+    child?.kill();
+    this.onCrash();
+  }
+  async cancelTransfer() {
+    if (!this.busy) return;
+    this.cancelling = true;
+    this.watchTransfer(10000, 'CANCELLED');
+    await this.call('cancelTransfer');
+  }
   constructor(
     private library: string,
     private onCrash: () => void,
@@ -32,6 +75,7 @@ export class MtpClient {
     });
     this.process = child;
     child.on('message', (message: MtpMessage) => {
+      if (this.process !== child) return;
       if (message.type === 'response') {
         const pending = this.pending.get(message.id);
         if (!pending) return;
@@ -40,6 +84,9 @@ export class MtpClient {
         else pending.reject(new AppError(message.reply.error.code, message.reply.error.message));
       } else if (message.type === 'transfer') {
         this.lastTransfer = message.update;
+        if (message.update.status === 'running' || message.update.status === 'preparing') {
+          if (!this.cancelling) this.watchTransfer();
+        } else this.clearWatchdog();
         if (message.update.status === 'completed' || message.update.status === 'failed')
           this.busy = false;
         this.transferListener?.(message.update);
@@ -48,6 +95,7 @@ export class MtpClient {
     child.once('exit', (code) => {
       if (this.process !== child) return;
       this.process = undefined;
+      this.clearWatchdog();
       const error = new AppError(
         'IO_ERROR',
         `The MTP service exited (${code}). Reconnect the device to continue.`,
@@ -72,14 +120,27 @@ export class MtpClient {
     const child = this.start();
     const id = ++this.nextId;
     return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.process === child)
+          this.abortService(
+            new AppError('TIMEOUT', 'MTP request timed out; reconnect to continue'),
+          );
+      }, 120000);
       this.pending.set(id, {
-        resolve: (data) => resolve(data as MtpOperations[K]['result']),
-        reject,
+        resolve: (data) => {
+          clearTimeout(timer);
+          resolve(data as MtpOperations[K]['result']);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
       });
       try {
         child.postMessage({ type: 'request', id, command, args });
       } catch (error) {
         this.pending.delete(id);
+        clearTimeout(timer);
         reject(error);
       }
     });
@@ -99,12 +160,15 @@ export class MtpClient {
   async transfer(request: TransferRequest, emit: (update: TransferUpdate) => void) {
     if (this.busy) throw new AppError('BUSY', 'A transfer is active');
     this.busy = true;
+    this.cancelling = false;
+    this.watchTransfer();
     this.transferListener = emit;
     this.lastTransfer = undefined;
     try {
       return await this.call('transfer', request);
     } catch (error) {
       this.busy = false;
+      this.clearWatchdog();
       throw error;
     }
   }

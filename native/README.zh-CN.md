@@ -22,7 +22,7 @@ npm run build:core -- --all         # Apple Silicon 和 Intel
 npm run build:core -- --all --install # 写入 resources/native 并更新校验清单
 ```
 
-构建脚本先校验源码归档，再进行独立目录构建。发布归档中预生成的 Linux endian 头文件会被移除，使用 configure 针对目标平台生成的头文件。由于新 SDK 的链接检查可能把旧系统缺少的 pipe2 弱符号判为可用，构建固定 `ac_cv_func_pipe2=no`，使用兼容的 pipe 实现。另随附 `patches/libmtp-macos-android-close.patch`：仅在 macOS 自动识别到 Android 协议扩展时取消“关闭会话后强制 USB reset”标志，避免手机从总线重新枚举造成即时重连失败。正常 MTP CloseSession 与 USB 接口释放仍执行，MTP 包编解码未修改。MTPZ（非 Android 的专有扩展）被禁用，不引入额外加密依赖。
+构建脚本先校验源码归档，再进行独立目录构建。发布归档中预生成的 Linux endian 头文件会被移除，使用 configure 针对目标平台生成的头文件。由于新 SDK 的链接检查可能把旧系统缺少的 pipe2 弱符号判为可用，构建固定 `ac_cv_func_pipe2=no`，使用兼容的 pipe 实现。另随附 `patches/libmtp-macos-android-close.patch`：仅在 macOS 自动识别到 Android 协议扩展时取消“关闭会话后强制 USB reset”标志，避免手机从总线重新枚举造成即时重连失败。正常 MTP CloseSession 与 USB 接口释放仍执行，MTP 包编解码未修改。另随附 `patches/libusb-macos-cooperative-open.patch`：macOS 上 `USBDeviceOpenSeize` 会重置设备并强制终止其他 USB 客户端（例如 adb），导致调试桥无法与 MTP 共存；该补丁改用 `USBDeviceOpen`，保留 libusb 所需的设备级访问，同时不再抢占其他客户端。MTPZ（非 Android 的专有扩展）被禁用，不引入额外加密依赖。
 
 两种原生库架构都以 macOS 12 为部署目标；这不代表 Electron 应用的最低系统版本。libmtp 的 libusb 依赖设置为 `@loader_path/libusb-1.0.0.dylib`，使用系统 libiconv；两个 dylib 均添加 ad-hoc 签名。随附 Intel 二进制尚未在 Intel Mac 真机验证。
 

@@ -53,7 +53,7 @@ npm ci
 npm run package:mac
 ```
 
-The application bundle is generated for your Mac's architecture:
+A DMG installer is generated in `release/` for your Mac's architecture (for example, `release/MacAndroid Relay-0.1.0-arm64.dmg`). The application bundle is also retained:
 
 - Apple Silicon: `release/mac-arm64/MacAndroid Relay.app`
 - Intel: `release/mac/MacAndroid Relay.app`
@@ -122,3 +122,7 @@ For a bug report, open an issue in this repository with your macOS version, Mac 
 Application code is provided under the [MIT License](LICENSE). Third-party components retain their own licenses and copyright notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Thanks to the [libmtp](https://github.com/libmtp/libmtp) and [libusb](https://github.com/libusb/libusb) maintainers. Their libraries provide the underlying transport; this project does not claim to implement the MTP protocol from scratch.
+
+## Transfer progress and recovery
+
+Transfers use a batch byte-based progress indicator and support cancellation. The ordinary desktop build restarts an unresponsive MTP service after 120 seconds without progress; cancellation escalates after 10 seconds. Reconnect afterwards. Completed files are kept; remaining temporary files may need cleanup after an abrupt USB disconnect. Upload replacement stages a new file and checks its size before renaming the original to a recovery backup. This is not an atomic device transaction or a checksum verification. The MAS build runs the backend in the main process and does not yet offer the same isolated-service force recovery.

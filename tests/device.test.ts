@@ -79,7 +79,7 @@ test('Device absence is a recoverable localized error; unsupported hosts do not 
   );
   assert.equal(loaded, false);
 });
-test('Upload collision is checked before deleting; confirmed overwrite and callback completion release the lock', async () => {
+test('Upload conflicts require confirmation without pre-deleting originals; completion releases the lock', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'macandroid-relay-transfer-'));
   try {
     const file = path.join(home, '文件.txt');
@@ -131,7 +131,7 @@ test('Upload collision is checked before deleting; confirmed overwrite and callb
     const events: TransferUpdate[] = [];
     await session.transfer({ ...request, overwrite: true }, (event) => events.push(event));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(deleted, 1);
+    assert.equal(deleted, 0);
     assert.equal(transferred, 1);
     assert.equal(events.filter((event) => event.status === 'completed').length, 1);
     assert.equal(session.active, false);
@@ -222,7 +222,7 @@ test('An empty device directory is null, not a failed operation, and accepts the
   }
 });
 
-test('Folder merges detect nested collisions and confirmed uploads delete only matching files', async () => {
+test('Folder merges detect nested collisions without pre-deleting matching files', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'macandroid-relay-merge-'));
   try {
     const source = path.join(home, '资料');
@@ -265,7 +265,7 @@ test('Folder merges detect nested collisions and confirmed uploads delete only m
     assert.deepEqual(removed, []);
     await session.transfer({ ...request, overwrite: true }, () => {});
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual(removed, ['/资料/文件.txt']);
+    assert.deepEqual(removed, []);
     await assert.rejects(
       session.transfer(
         { ...request, direction: 'download', destination: home, sources: [folder] },

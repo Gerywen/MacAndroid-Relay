@@ -1,0 +1,25 @@
+--- a/libusb/os/darwin_usb.c
++++ b/libusb/os/darwin_usb.c
+@@ -1190,7 +1190,7 @@
+   /* According to Apple's documentation the device must be open for DeviceRequest but we may not be able to open some
+    * devices and Apple's USB Prober doesn't bother to open the device before issuing a descriptor request.  Still,
+    * to follow the spec as closely as possible, try opening the device */
+-  is_open = ((*device)->USBDeviceOpenSeize(device) == kIOReturnSuccess);
++  is_open = ((*device)->USBDeviceOpen(device) == kIOReturnSuccess);
+ 
+   do {
+     /**** retrieve device descriptor ****/
+@@ -1593,8 +1593,11 @@
+       usbi_err(HANDLE_CTX(dev_handle), "device interface is NULL, cannot open");
+       return LIBUSB_ERROR_NO_DEVICE;
+     }
+-    /* try to open the device */
+-    kresult = (*dpriv->device)->USBDeviceOpenSeize (dpriv->device);
++    /* Open cooperatively: USBDeviceOpenSeize resets the device and forcibly
++     * terminates other USB clients (for example adb), so a debug bridge cannot
++     * stay attached while MTP is connected. USBDeviceOpen keeps device-level
++     * access without kicking other clients. */
++    kresult = (*dpriv->device)->USBDeviceOpen (dpriv->device);
+     if (kresult != kIOReturnSuccess) {
+       usbi_warn (HANDLE_CTX (dev_handle), "USBDeviceOpen: %s", darwin_error_str(kresult));
+ 

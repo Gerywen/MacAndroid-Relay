@@ -17,6 +17,7 @@ const api: DesktopApi = {
   mutate: (request) => invoke('mutate', request),
   connect: () => invoke('connect'),
   disconnect: () => invoke('disconnect'),
+  cancelTransfer: () => invoke('cancel-transfer'),
   transfer: (request) => invoke('transfer', request),
   chooseFolder: () => invoke('choose-folder'),
   openFile: (file) => invoke('open-file', file),

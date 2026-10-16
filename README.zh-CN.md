@@ -53,7 +53,7 @@ npm ci
 npm run package:mac
 ```
 
-应用包按照当前 Mac 架构生成：
+DMG 安装包按照当前 Mac 架构生成在 `release/` 目录（例如 `release/MacAndroid Relay-0.1.0-arm64.dmg`），同时保留应用包：
 
 - Apple Silicon：`release/mac-arm64/MacAndroid Relay.app`
 - Intel：`release/mac/MacAndroid Relay.app`
@@ -122,3 +122,7 @@ C/FFI 测试需要 Xcode Command Line Tools。普通开发使用随附原生库�
 应用代码采用 [MIT 许可证](LICENSE)。第三方组件保留各自的许可证和版权声明，详见[第三方声明](THIRD_PARTY_NOTICES.zh-CN.md)。
 
 感谢 [libmtp](https://github.com/libmtp/libmtp) 和 [libusb](https://github.com/libusb/libusb) 的维护者。底层传输能力由这些库提供，本项目不宣称从零实现了 MTP 协议。
+
+## 传输进度与恢复
+
+传输进度按整批文件字节数计算，并支持取消。普通桌面版连续 120 秒无进度时会结束无响应的 MTP 服务；取消等待超过 10 秒时也会结束该服务，之后需重连。已完成的文件会保留；突然断开 USB 后可能需要清理残留临时文件。覆盖上传先暂存新文件并核对大小，再将原文件改名为恢复备份。该过程不等于设备端原子事务或内容校验。MAS 版运行在主进程，尚不提供相同的独立服务强制恢复保障。

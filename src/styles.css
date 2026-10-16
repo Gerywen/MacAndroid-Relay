@@ -801,124 +801,6 @@ i.online {
   font-weight: 600;
   pointer-events: none;
 }
-.transfer-shelf {
-  padding: 15px 3px 12px;
-  flex-shrink: 0;
-}
-.shelf-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.shelf-heading h2 {
-  font-size: 12px;
-  color: var(--muted);
-  display: flex;
-  gap: 7px;
-  align-items: center;
-}
-.shelf-heading h2 > span {
-  background: var(--toolbar);
-  border: 1px solid var(--line);
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 4px;
-}
-.transfer-shelf > p {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 7px;
-}
-.transfer-list {
-  margin-top: 9px;
-  max-height: 139px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.transfer-job {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  padding: 10px 12px;
-  border-radius: 10px;
-  min-height: 69px;
-}
-.transfer-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.transfer-icon.download {
-  color: var(--green);
-  background: rgba(48, 150, 94, 0.1);
-}
-.transfer-job-main {
-  flex: 1;
-  min-width: 0;
-}
-.transfer-job-main strong {
-  font-size: 12px;
-  font-weight: 500;
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.transfer-job-main > span {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.progress-track {
-  height: 3px;
-  margin-top: 7px;
-  border-radius: 3px;
-  background: var(--line);
-  overflow: hidden;
-}
-.progress-track > i {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.12s;
-}
-.transfer-job[data-transfer='completed'] .progress-track > i {
-  background: var(--green);
-}
-.transfer-job[data-transfer='failed'] .progress-track > i {
-  background: var(--danger);
-}
-.transfer-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-  color: var(--muted);
-  min-width: 65px;
-  font-variant-numeric: tabular-nums;
-}
-.transfer-meta > span {
-  font-size: 11px;
-}
-.transfer-job[data-transfer='completed'] .transfer-meta > svg {
-  color: var(--green);
-}
-.transfer-job[data-transfer='failed'] .transfer-meta > svg {
-  color: var(--danger);
-}
 .statusbar {
   height: 28px;
   flex-shrink: 0;
@@ -935,6 +817,38 @@ i.online {
   display: flex;
   align-items: center;
   gap: 7px;
+}
+.status-transfer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 45%;
+  color: var(--muted);
+}
+.status-progress {
+  width: 90px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.status-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.12s;
+}
+.status-transfer > strong {
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.status-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .modal {
   padding: 0;
@@ -1095,6 +1009,65 @@ select {
 }
 .toast svg {
   color: var(--green);
+}
+.toast.error svg {
+  color: var(--danger);
+}
+.context-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+.context-menu {
+  position: fixed;
+  min-width: 190px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow:
+    0 14px 36px rgba(20, 44, 79, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(18px);
+  z-index: 101;
+}
+.context-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+}
+.context-item:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.context-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.context-item.danger {
+  color: var(--danger);
+}
+.context-item.danger:hover:not(:disabled) {
+  background: rgba(189, 52, 66, 0.12);
+  color: var(--danger);
+}
+.context-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
 }
 .spin {
   animation: spin 1s linear infinite;
@@ -1493,31 +1466,6 @@ select {
   margin: 3px 0 4px;
   padding-inline: 19px;
 }
-.transfer-shelf {
-  border: 1px solid var(--glass-edge);
-  background: var(--toolbar);
-  border-radius: 15px;
-  padding: 11px 15px;
-  margin: 15px 0;
-  backdrop-filter: blur(24px) saturate(140%);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 4px 16px rgba(39, 70, 118, 0.025);
-}
-.shelf-heading h2 {
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 600;
-}
-.transfer-shelf > p {
-  font-size: 11px;
-  margin-top: 5px;
-}
-.transfer-job {
-  background: var(--surface);
-  border-color: var(--glass-edge);
-  box-shadow: inset 0 1px 0 var(--glass-highlight);
-}
 .statusbar {
   height: 26px;
   background: rgba(255, 255, 255, 0.08);
@@ -1620,7 +1568,6 @@ select {
 @media (prefers-reduced-transparency: reduce) {
   .file-pane,
   .sidebar,
-  .transfer-shelf,
   .modal,
   .toast {
     background: var(--surface-strong);
@@ -1630,5 +1577,70 @@ select {
   }
   :root[data-theme='dark'] {
     --surface-strong: #25344e;
+  }
+}
+
+.transfer-card {
+  position: fixed;
+  bottom: 48px;
+  right: 24px;
+  width: min(440px, calc(100vw - 48px));
+  padding: 18px;
+  z-index: 30;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-strong);
+  color: var(--text, CanvasText);
+  backdrop-filter: blur(28px);
+  box-shadow: 0 12px 40px #0002;
+}
+.transfer-card-heading,
+.transfer-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.transfer-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.transfer-meter {
+  height: 6px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #8883;
+}
+.transfer-meter i {
+  display: block;
+  height: 100%;
+  background: #269acb;
+  border-radius: inherit;
+  transition: width 0.15s ease;
+}
+.transfer-details {
+  margin-top: 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.transfer-meter.indeterminate i {
+  width: 35% !important;
+  animation: transfer-scan 1.4s infinite ease-in-out;
+}
+@keyframes transfer-scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transfer-meter i {
+    animation: none !important;
+    transition: none;
   }
 }

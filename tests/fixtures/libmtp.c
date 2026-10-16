@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-static int allocations,fail_download,bad_name;
+static int allocations,fail_download,bad_name,fail_upload,fail_rename,short_download;
 typedef struct {uint32_t id,parent;char *name;char *data;size_t size;int folder,active;} object;
 static object objects[128];
 static unsigned length;
@@ -27,11 +27,14 @@ static LIBMTP_file_t *metadata(object *entry){if(!entry)return NULL;LIBMTP_file_
 LIBMTP_file_t *LIBMTP_Get_Filemetadata(LIBMTP_mtpdevice_t *device,uint32_t id){return metadata(find(id));}
 LIBMTP_file_t *LIBMTP_Get_Files_And_Folders(LIBMTP_mtpdevice_t *device,uint32_t storage,uint32_t parent){if(parent==LIBMTP_FILES_AND_FOLDERS_ROOT)parent=0;LIBMTP_file_t *head=NULL,**tail=&head;for(unsigned i=0;i<length;i++)if(objects[i].active&&objects[i].parent==parent){*tail=metadata(&objects[i]);tail=&(*tail)->next;}return head;}
 uint32_t LIBMTP_Create_Folder(LIBMTP_mtpdevice_t *device,char *name,uint32_t parent,uint32_t storage){if(parent==0){error(device);return 0;}if(parent==LIBMTP_FILES_AND_FOLDERS_ROOT)parent=0;if(length>=128)return 0;unsigned index=length++;objects[index]=(object){index+1,parent,strdup(name),NULL,0,1,1};return index+1;}
-int LIBMTP_Set_File_Name(LIBMTP_mtpdevice_t *device,LIBMTP_file_t *file,const char *name){object *entry=find(file->item_id);if(!entry)return -1;free(entry->name);entry->name=strdup(name);free(file->filename);file->filename=strdup(name);return 0;}
+int LIBMTP_Set_File_Name(LIBMTP_mtpdevice_t *device,LIBMTP_file_t *file,const char *name){object *entry=find(file->item_id);if(!entry)return -1;if(fail_rename && --fail_rename==0){error(device);return -1;}free(entry->name);entry->name=strdup(name);free(file->filename);file->filename=strdup(name);return 0;}
 int LIBMTP_Delete_Object(LIBMTP_mtpdevice_t *device,uint32_t id){object *entry=find(id);if(!entry)return -1;entry->active=0;return 0;}
-int LIBMTP_Send_File_From_File(LIBMTP_mtpdevice_t *device,const char *source,LIBMTP_file_t *file,LIBMTP_progressfunc_t progress,const void *data){if(length>=128)return -1;FILE *input=fopen(source,"rb");if(!input)return -1;unsigned index=length++;char *bytes=malloc(file->filesize+1);size_t count=fread(bytes,1,file->filesize,input);fclose(input);objects[index]=(object){index+1,file->parent_id==LIBMTP_FILES_AND_FOLDERS_ROOT?0:file->parent_id,strdup(file->filename),bytes,count,0,1};file->item_id=index+1;if(progress(count,count,data)){error(device);return -1;}return 0;}
-int LIBMTP_Get_File_To_File_Descriptor(LIBMTP_mtpdevice_t *device,uint32_t id,int fd,LIBMTP_progressfunc_t progress,const void *data){object *entry=find(id);if(!entry)return -1;if(fail_download){write(fd,"bad",3);error(device);return -1;}if(write(fd,entry->data,entry->size)!=(ssize_t)entry->size)return -1;if(progress(entry->size,entry->size,data)){error(device);return -1;}return 0;}
+int LIBMTP_Send_File_From_File(LIBMTP_mtpdevice_t *device,const char *source,LIBMTP_file_t *file,LIBMTP_progressfunc_t progress,const void *data){if(fail_upload){error(device);return -1;}if(length>=128)return -1;FILE *input=fopen(source,"rb");if(!input)return -1;unsigned index=length++;char *bytes=malloc(file->filesize+1);size_t count=fread(bytes,1,file->filesize,input);fclose(input);objects[index]=(object){index+1,file->parent_id==LIBMTP_FILES_AND_FOLDERS_ROOT?0:file->parent_id,strdup(file->filename),bytes,count,0,1};file->item_id=index+1;if(progress(count,count,data)){error(device);return -1;}return 0;}
+int LIBMTP_Get_File_To_File_Descriptor(LIBMTP_mtpdevice_t *device,uint32_t id,int fd,LIBMTP_progressfunc_t progress,const void *data){object *entry=find(id);if(!entry)return -1;if(fail_download){write(fd,"bad",3);error(device);return -1;}if(short_download){write(fd,"bad",3);return 0;}if(write(fd,entry->data,entry->size)!=(ssize_t)entry->size)return -1;if(progress(entry->size,entry->size,data)){error(device);return -1;}return 0;}
 int FixtureAllocations(void){return allocations;}
+void FixtureFailUpload(int flag){fail_upload=flag;}
+void FixtureFailRename(int flag){fail_rename=flag;}
+void FixtureShortDownload(int flag){short_download=flag;}
 void FixtureFailDownload(int flag){fail_download=flag;}
 void FixtureBadName(int flag){bad_name=flag;}
 size_t SizeFile(void){return sizeof(LIBMTP_file_t);}

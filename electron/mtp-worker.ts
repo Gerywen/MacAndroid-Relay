@@ -21,6 +21,8 @@ async function execute(request: MtpRequest): Promise<unknown> {
       return device.transfer(request.args[0], (update) => post({ type: 'transfer', update }));
     case 'diagnostics':
       return device.diagnostics();
+    case 'cancelTransfer':
+      return device.cancelTransfer();
     case 'close':
       return device.close();
   }
@@ -29,6 +31,12 @@ let queue: Promise<unknown> = Promise.resolve();
 port.on('message', (event) => {
   const request = event.data as MtpRequest;
   if (request.type !== 'request') return;
+  if (request.command === 'cancelTransfer') {
+    void reply(() => execute(request)).then((reply) =>
+      post({ type: 'response', id: request.id, reply }),
+    );
+    return;
+  }
   queue = queue
     .then(async () =>
       post({ type: 'response', id: request.id, reply: await reply(() => execute(request)) }),

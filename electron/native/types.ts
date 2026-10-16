@@ -40,6 +40,8 @@ export interface NativeTransferOptions {
   sources: string[];
   destination: string;
   preprocessFiles: boolean;
+  overwrite?: boolean;
+  cancelled?: () => boolean;
   onError: (result: NativeResult<unknown>) => void;
   onPreprocess: (data: TransferPreprocess) => void;
   onProgress: (data: TransferProgress) => void;

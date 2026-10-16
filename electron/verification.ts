@@ -389,6 +389,57 @@ export async function verifyWindow(window: BrowserWindow, home: string) {
         'renamed row',
       );
       await capture('zh-light');
+      // Synthetic progress events validate rendering without touching a connected phone.
+      const preview: TransferUpdate = {
+        id: 'progress-preview',
+        direction: 'upload',
+        destination: '/',
+        count: 2,
+        status: 'preparing',
+        progress: 0,
+        currentFile: '',
+        speed: 0,
+        elapsed: 0,
+        bytesSent: 0,
+        totalBytes: 0,
+      };
+      web.send('macandroid-relay:transfer-update', preview);
+      await until(
+        () => execute(`!!document.querySelector('.transfer-meter.indeterminate')`),
+        'indeterminate preparation',
+      );
+      web.send('macandroid-relay:transfer-update', {
+        ...preview,
+        status: 'running',
+        progress: 42,
+        currentFile: '/demo/演示视频.mp4',
+        speed: 12.5,
+        elapsed: 8000,
+        bytesSent: 42 * 1048576,
+        totalBytes: 100 * 1048576,
+      });
+      await until(
+        () => execute(`document.querySelector('.transfer-details')?.textContent.includes('42%')`),
+        'batch byte progress',
+      );
+      await capture('transfer-progress');
+      web.send('macandroid-relay:transfer-update', { ...preview, status: 'running', progress: 99 });
+      await until(
+        () =>
+          execute(
+            `document.querySelector('.transfer-card')?.textContent.includes('正在完成文件提交')`,
+          ),
+        'commit phase',
+      );
+      web.send('macandroid-relay:transfer-update', {
+        ...preview,
+        status: 'completed',
+        progress: 100,
+      });
+      await until(
+        () => execute(`!document.querySelector('.transfer-card')`),
+        'completion clears active progress',
+      );
       await execute(`document.querySelector('button[aria-label="设置"]').click()`);
       await until(() => execute(`!!document.querySelector('#setting-language')`), 'settings');
       await execute(

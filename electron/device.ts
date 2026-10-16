@@ -39,6 +39,10 @@ export class DeviceSession {
   private core?: MtpCore;
   private state: Connection = { connected: false, name: 'Android', storages: [] };
   private busy = false;
+  private cancelled = false;
+  async cancelTransfer() {
+    this.cancelled = true;
+  }
   constructor(
     private library: string,
     private factory: (file: string) => MtpCore = (file) => new Libmtp(file),
@@ -230,6 +234,7 @@ export class DeviceSession {
       filename(source.name);
     }
     this.busy = true;
+    this.cancelled = false;
     const id = randomUUID();
     const update: TransferUpdate = {
       id,
@@ -248,8 +253,7 @@ export class DeviceSession {
       const conflicts = await this.conflicts(request);
       if (conflicts.length && !request.overwrite)
         throw new AppError('OVERWRITE_REQUIRED', 'Files with the same names exist');
-      if (conflicts.length && request.direction === 'upload')
-        unwrap(await this.sdk().deleteFile({ storageId: request.storageId, files: conflicts }));
+      if (this.cancelled) throw new AppError('CANCELLED', 'Transfer cancelled');
       emit({ ...update });
       let lastUpdate = Date.now();
       const publish = () => {
@@ -278,6 +282,8 @@ export class DeviceSession {
           destination: request.destination,
           sources: request.sources.map((file) => file.path),
           preprocessFiles: request.preprocess,
+          overwrite: request.overwrite,
+          cancelled: () => this.cancelled,
           onPreprocess: (data) => {
             update.currentFile = data.fullPath;
             publish();
@@ -288,9 +294,7 @@ export class DeviceSession {
               currentFile: data.fullPath,
               speed: data.speed,
               elapsed: data.elapsedTime,
-              progress: request.preprocess
-                ? data.bulkFileSize.progress
-                : data.activeFileSize.progress,
+              progress: Math.max(update.progress, Math.min(99, data.bulkFileSize.progress)),
               bytesSent: data.bulkFileSize.sent,
               totalBytes: data.bulkFileSize.total,
             });

@@ -1,3 +1,4 @@
+import { getSystemErrorName } from 'node:util';
 import * as koffi from 'koffi';
 export type Address = bigint | null;
 // Public structures from libmtp 1.1.23. Pointers are decoded before their owner is freed.
@@ -98,6 +99,9 @@ export class LibmtpBindings {
   private functions: Record<NativeOperation, ReturnType<koffi.LibraryHandle['func']>>;
   private libc = koffi.load('/usr/lib/libSystem.B.dylib');
   private duplicate = this.libc.func('void *strdup(const char *text)');
+  private renameExclusive = this.libc.func(
+    'int renamex_np(const char *source, const char *destination, unsigned int flags)',
+  );
   constructor(file: string) {
     this.library = koffi.load(file);
     this.functions = Object.fromEntries(
@@ -115,6 +119,18 @@ export class LibmtpBindings {
         else resolve(value);
       }),
     );
+  }
+  publishExclusive(source: string, destination: string): void {
+    // RENAME_EXCL, from the macOS SDK's sys/stdio.h. One syscall checks and publishes.
+    if (this.renameExclusive(source, destination, 0x00000004) !== 0) {
+      const errno = koffi.errno();
+      throw Object.assign(
+        new Error('Cannot publish download without overwriting: ' + destination),
+        {
+          code: getSystemErrorName(-errno),
+        },
+      );
+    }
   }
   strdup(value: string): Address {
     return this.duplicate(value) as Address;

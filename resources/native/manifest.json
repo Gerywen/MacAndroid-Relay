@@ -1,5 +1,5 @@
 {
-  "origin": "Upstream libmtp and libusb with the macOS Android session compatibility patch",
+  "origin": "Upstream libmtp and libusb with macOS Android compatibility patches",
   "packages": [
     {
       "name": "libusb",
@@ -16,16 +16,20 @@
       "source": "https://downloads.sourceforge.net/project/libmtp/libmtp/1.1.23/libmtp-1.1.23.tar.gz"
     }
   ],
-  "sha256": {
-    "amd64/libusb-1.0.0.dylib": "bc4b452508503cffeb80516bc658cc24f402bb5b224f79c316c830be20220dd0",
-    "amd64/libmtp.9.dylib": "5afd3047e9c4caf686b0508a77abb65a60ec6d3b372df0ee83e7e56b6334a081",
-    "arm64/libusb-1.0.0.dylib": "db5c8319f10481d1ead7816705f6b3364748741f19d3787c9782c1aa6b7b42b1",
-    "arm64/libmtp.9.dylib": "12a711ce85b6f11638308ae3384b02a18f86c57357721a3cbc3326840c810d51"
-  },
   "patches": [
     {
       "file": "patches/libmtp-macos-android-close.patch",
       "sha256": "e8b09593b8cf93248732e0a354f2d50f0e0db6e40b5fd5b9ec68c4c4f1b135f2"
+    },
+    {
+      "file": "patches/libusb-macos-cooperative-open.patch",
+      "sha256": "3682d3de533627d306bc3e2b686379143e50ec0b1960a255a1abd72ce6c71453"
     }
-  ]
+  ],
+  "sha256": {
+    "arm64/libmtp.9.dylib": "12a711ce85b6f11638308ae3384b02a18f86c57357721a3cbc3326840c810d51",
+    "arm64/libusb-1.0.0.dylib": "0225b0cdbe3a100b545313d84e6b3000336552234fb55b505a2094510b6fe151",
+    "amd64/libmtp.9.dylib": "5afd3047e9c4caf686b0508a77abb65a60ec6d3b372df0ee83e7e56b6334a081",
+    "amd64/libusb-1.0.0.dylib": "4426949e4c7877b95d0af19be4601fb39222770531e04db8050ad6fa2696bacb"
+  }
 }

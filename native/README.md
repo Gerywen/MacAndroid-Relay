@@ -36,6 +36,7 @@ The script verifies the source archives and builds in separate directories. It a
 - Remove the release archive's generated Linux endian header so configure can supply the correct target-platform header.
 - Set `ac_cv_func_pipe2=no`: newer SDKs may link the weak `pipe2` symbol even when the deployment OS does not provide it. The build uses the compatible `pipe` implementation.
 - Apply `patches/libmtp-macos-android-close.patch`. On macOS, when libmtp identifies an Android protocol extension, the patch clears the forced USB-reset-on-close flag. Normal MTP CloseSession and USB interface release still run; MTP packet encoding and decoding are unchanged.
+- Apply `patches/libusb-macos-cooperative-open.patch`. On macOS, `USBDeviceOpenSeize` resets the device and terminates other USB clients, so a concurrently running `adb` cannot stay attached. The patch uses `USBDeviceOpen` instead, keeping the device-level access libusb needs without evicting other clients.
 - Disable MTPZ, a proprietary extension outside Android file transfer, to avoid its additional cryptographic dependency.
 
 Both native architectures target macOS 12. This is the native library deployment target, not a statement about the minimum OS supported by the Electron application. libmtp loads `@loader_path/libusb-1.0.0.dylib` and uses the system libiconv. Both libraries receive ad-hoc signatures.

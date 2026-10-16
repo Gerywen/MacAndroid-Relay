@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
@@ -131,6 +132,46 @@ test(
       assert.equal(errors, 1);
       assert.equal(allocated(), 0);
       fail(0);
+      const downloadOptions: NativeTransferOptions = {
+        ...options,
+        direction: 'download',
+        sources: ['/文件.txt'],
+        destination: download,
+        overwrite: false,
+      };
+      const target = path.join(download, '文件.txt');
+      await rm(target);
+      // A different application creates the destination after our initial conflict scan.
+      assert.equal(
+        (
+          await core.transferFiles({
+            ...downloadOptions,
+            onProgress: () => {
+              writeFileSync(target, 'created concurrently');
+            },
+          })
+        ).code,
+        'OVERWRITE_REQUIRED',
+      );
+      assert.equal(await readFile(target, 'utf8'), 'created concurrently');
+      assert(!(await readdir(download)).some((name) => name.endsWith('.partial')));
+      assert.equal((await core.transferFiles({ ...downloadOptions, overwrite: true })).data, true);
+      assert.equal(await readFile(target, 'utf8'), 'data');
+      const shortDownload = probe.func('void FixtureShortDownload(int flag)');
+      shortDownload(1);
+      await writeFile(target, 'keep original');
+      assert.equal(
+        (await core.transferFiles({ ...downloadOptions, overwrite: true })).code,
+        'IO_ERROR',
+      );
+      assert.equal(await readFile(target, 'utf8'), 'keep original');
+      await rm(target);
+      assert.equal((await core.transferFiles(downloadOptions)).code, 'IO_ERROR');
+      assert(!(await readdir(download)).includes('文件.txt'));
+      assert(!(await readdir(download)).some((name) => name.endsWith('.partial')));
+      shortDownload(0);
+      assert.equal((await core.transferFiles(downloadOptions)).data, true);
+      assert.equal(await readFile(target, 'utf8'), 'data');
       assert.equal(
         (await core.renameFile({ storageId: 1, fullPath: '/中文目录', newFilename: 'renamed' }))
           .data,
@@ -141,6 +182,50 @@ test(
         (await core.walk({ storageId: 1, fullPath: '/', skipHiddenFiles: false })).data?.length,
         2,
       );
+      const replacement = path.join(home, '文件.txt');
+      await writeFile(replacement, 'replacement content');
+      const upload = { ...options, sources: [replacement], overwrite: true };
+      const verifyOriginal = async (expected: string) => {
+        assert.equal(
+          (
+            await core.transferFiles({
+              ...options,
+              direction: 'download',
+              sources: ['/文件.txt'],
+              destination: download,
+              overwrite: true,
+            })
+          ).data,
+          true,
+        );
+        assert.equal(await readFile(path.join(download, '文件.txt'), 'utf8'), expected);
+      };
+      const failUpload = probe.func('void FixtureFailUpload(int flag)');
+      const failRename = probe.func('void FixtureFailRename(int flag)');
+      failUpload(1);
+      assert.equal((await core.transferFiles(upload)).code, 'IO_ERROR');
+      failUpload(0);
+      await verifyOriginal('data');
+      let cancelled = false;
+      assert.equal(
+        (
+          await core.transferFiles({
+            ...upload,
+            cancelled: () => cancelled,
+            onProgress: () => {
+              cancelled = true;
+            },
+          })
+        ).code,
+        'CANCELLED',
+      );
+      await verifyOriginal('data');
+      failRename(2); // Backup succeeds, publishing the new file fails; rollback must restore original.
+      assert.equal((await core.transferFiles(upload)).code, 'IO_ERROR');
+      await verifyOriginal('data');
+      assert.equal((await core.transferFiles(upload)).data, true);
+      await verifyOriginal('replacement content');
+      assert.equal(allocated(), 0);
       assert.equal((await core.dispose()).data, true);
       probe.unload();
     } finally {

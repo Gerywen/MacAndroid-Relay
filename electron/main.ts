@@ -282,6 +282,7 @@ app
     });
     safe('connect', () => serial(() => device.connect()));
     safe('disconnect', () => serial(() => device.disconnect()));
+    safe('cancel-transfer', () => device.cancelTransfer());
     safe('transfer', (request: TransferRequest) =>
       serial(async () => {
         if (request.direction === 'upload') {

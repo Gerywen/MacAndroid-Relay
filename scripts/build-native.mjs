@@ -44,16 +44,26 @@ run(
   process.env,
   path.join(sources, 'libmtp-1.1.23'),
 );
+run(
+  'patch',
+  ['-p1', '-i', path.join(root, 'native/patches/libusb-macos-cooperative-open.patch')],
+  process.env,
+  path.join(sources, 'libusb-1.0.30'),
+);
 const targets = process.argv.includes('--all')
   ? ['arm64', 'amd64']
   : [process.arch === 'arm64' ? 'arm64' : 'amd64'];
 const manifest = {
-  origin: 'Upstream libmtp and libusb with the macOS Android session compatibility patch',
+  origin: 'Upstream libmtp and libusb with macOS Android compatibility patches',
   packages,
   patches: [
     {
       file: 'patches/libmtp-macos-android-close.patch',
       sha256: hash(path.join(root, 'native/patches/libmtp-macos-android-close.patch')),
+    },
+    {
+      file: 'patches/libusb-macos-cooperative-open.patch',
+      sha256: hash(path.join(root, 'native/patches/libusb-macos-cooperative-open.patch')),
     },
   ],
   sha256: {},

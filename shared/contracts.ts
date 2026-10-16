@@ -27,7 +27,9 @@ export type ErrorCode =
   | 'OVERWRITE_REQUIRED'
   | 'INVALID_PATH'
   | 'UNSUPPORTED'
-  | 'IO_ERROR';
+  | 'IO_ERROR'
+  | 'CANCELLED'
+  | 'TIMEOUT';
 export interface Failure {
   code: ErrorCode;
   message: string;
@@ -103,6 +105,7 @@ export interface DesktopApi {
   mutate(request: Mutation): Promise<Reply<void>>;
   connect(): Promise<Reply<Connection>>;
   disconnect(): Promise<Reply<void>>;
+  cancelTransfer(): Promise<Reply<void>>;
   transfer(request: TransferRequest): Promise<Reply<{ id: string }>>;
   onTransfer(callback: (update: TransferUpdate) => void): () => void;
   onDeviceChanged(callback: (reason: 'change' | 'unavailable') => void): () => void;

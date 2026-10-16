@@ -350,6 +350,7 @@ export class Libmtp {
     const files: PlannedFile[] = [];
     if (options.direction === 'upload') {
       const visit = async (source: string, destination: string) => {
+        if (options.cancelled?.()) throw new CoreError('CANCELLED', 'Transfer cancelled');
         const info = await lstat(source);
         if (info.isSymbolicLink()) return;
         if (!info.isDirectory() && !info.isFile())
@@ -369,6 +370,7 @@ export class Libmtp {
         );
     } else {
       const visit = async (entry: ObjectEntry, destination: string) => {
+        if (options.cancelled?.()) throw new CoreError('CANCELLED', 'Transfer cancelled');
         files.push({
           source: entry.path,
           destination,
@@ -390,7 +392,12 @@ export class Libmtp {
   async transferFiles(options: NativeTransferOptions): Promise<NativeResult<unknown>> {
     const result = await this.exclusive(async () => {
       const started = Date.now();
+      const checkCancelled = () => {
+        if (options.cancelled?.()) throw new CoreError('CANCELLED', 'Transfer cancelled');
+      };
+      checkCancelled();
       const files = await this.plan(options);
+      checkCancelled();
       const total = files.reduce((sum, file) => sum + (file.directory ? 0 : file.size), 0);
       let sent = 0,
         completed = 0,
@@ -422,6 +429,7 @@ export class Libmtp {
         options.onProgress(event);
       };
       for (const file of files) {
+        checkCancelled();
         options.onPreprocess({
           fullPath: file.source,
           name: path.basename(file.source),
@@ -440,6 +448,7 @@ export class Libmtp {
         let callbackError: unknown;
         const callback = koffi.register((bytes: number | bigint) => {
           try {
+            checkCancelled();
             progress(file, Number(bytes));
             return 0;
           } catch (error) {
@@ -454,12 +463,27 @@ export class Libmtp {
               options.storageId,
               path.posix.dirname(file.destination),
             );
+            const name = this.safeName(path.posix.basename(file.destination));
+            const existing = (
+              await this.list(options.storageId, parent, path.posix.dirname(file.destination))
+            ).find((entry) => entry.name === name);
+            if (existing && (!options.overwrite || existing.isFolder))
+              throw new CoreError('OVERWRITE_REQUIRED', 'Destination already exists');
+            const staging = `.relay-${randomUUID()}.partial`;
+            const renameObject = async (id: number, value: string) => {
+              const meta = await this.api.call<Address>('metadata', this.connected(), id);
+              if (!meta) throw this.diagnostic('Cannot read replacement metadata');
+              try {
+                if (await this.api.call<number>('rename', this.connected(), meta, value))
+                  throw this.diagnostic('Cannot rename replacement object');
+              } finally {
+                this.api.sync('destroyFile', meta);
+              }
+            };
             const metadata = this.api.sync<Address>('newFile');
             if (!metadata) throw new CoreError('IO_ERROR', 'Cannot allocate upload metadata');
             try {
-              const filename = this.api.strdup(
-                this.safeName(path.posix.basename(file.destination)),
-              );
+              const filename = this.api.strdup(staging);
               if (!filename) throw new CoreError('IO_ERROR', 'Cannot allocate upload filename');
               koffi.encode(metadata, FileStruct, {
                 item_id: 0,
@@ -482,6 +506,64 @@ export class Libmtp {
                 )) !== 0
               )
                 throw callbackError ?? this.diagnostic('Upload failed');
+              progress(file, file.size, true);
+              checkCancelled();
+              const uploaded = koffi.decode(metadata, FileStruct) as NativeFile;
+              const verify = await this.api.call<Address>(
+                'metadata',
+                this.connected(),
+                uploaded.item_id,
+              );
+              if (!verify) throw this.diagnostic('Cannot verify uploaded file');
+              try {
+                if (Number((koffi.decode(verify, FileStruct) as NativeFile).filesize) !== file.size)
+                  throw new CoreError('IO_ERROR', 'Uploaded file size does not match');
+              } finally {
+                this.api.sync('destroyFile', verify);
+              }
+              if (existing) {
+                const backup = `.relay-${randomUUID()}.backup`;
+                await renameObject(existing.id, backup);
+                try {
+                  await renameObject(uploaded.item_id, name);
+                } catch (error) {
+                  try {
+                    await renameObject(existing.id, name);
+                  } catch {
+                    throw new CoreError(
+                      'IO_ERROR',
+                      `Replacement failed; original retained as ${backup}`,
+                    );
+                  }
+                  throw error;
+                }
+                if (await this.api.call<number>('delete', this.connected(), existing.id))
+                  throw new CoreError(
+                    'IO_ERROR',
+                    `File replaced; original backup retained as ${backup}`,
+                  );
+              } else await renameObject(uploaded.item_id, name);
+              this.directories.clear();
+            } catch (error) {
+              const staged = koffi.decode(metadata, FileStruct) as NativeFile;
+              if (staged.item_id) {
+                const meta = await this.api.call<Address>(
+                  'metadata',
+                  this.connected(),
+                  staged.item_id,
+                );
+                if (meta) {
+                  try {
+                    const entry = koffi.decode(meta, FileStruct) as NativeFile;
+                    if (entry.filename && koffi.decode(entry.filename, 'char', -1) === staging)
+                      await this.api.call('delete', this.connected(), staged.item_id);
+                  } finally {
+                    this.api.sync('destroyFile', meta);
+                  }
+                }
+              }
+              this.directories.clear();
+              throw error;
             } finally {
               this.api.sync('destroyFile', metadata);
             }
@@ -504,9 +586,29 @@ export class Libmtp {
                 )) !== 0
               )
                 throw callbackError ?? this.diagnostic('Download failed');
+              checkCancelled();
+              const downloaded = await handle.stat();
+              if (downloaded.size !== file.size)
+                throw new CoreError('IO_ERROR', 'Downloaded file size does not match');
               await handle.sync();
               await handle.close();
-              await rename(temporary, file.destination);
+              checkCancelled();
+              if (options.overwrite) {
+                await rename(temporary, file.destination);
+              } else {
+                // The OS publishes atomically and refuses any existing destination entry.
+                // Never fall back to rename: that would reintroduce an unconfirmed overwrite.
+                try {
+                  this.api.publishExclusive(temporary, file.destination);
+                } catch (error) {
+                  if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+                    throw new CoreError(
+                      'OVERWRITE_REQUIRED',
+                      'Destination appeared during download',
+                    );
+                  throw error;
+                }
+              }
             } finally {
               await handle.close().catch(() => {});
               await rm(temporary, { force: true });
